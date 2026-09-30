@@ -1003,7 +1003,7 @@ operator:
 
   # Container image
   image: mavrick-operator:0.0.0
-  registry: robustadev
+  registry: ghcr.io/mavrick-1
   imagePullPolicy: IfNotPresent
 
   # Mavrick API connection

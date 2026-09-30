@@ -886,6 +886,111 @@ def get_model():
     return {"model_name": json.dumps(config.get_models_list())}
 
 
+# ── OpenAI-compatible adapter ────────────────────────────────────────────────
+# Lets OpenAI-style clients (e.g. the LibreChat web UI) talk to MavrickGPT. It
+# translates the OpenAI Chat Completions contract to the native /api/chat flow so
+# no client-side adapter is needed. Only the subset the UI relies on is mapped.
+def _extract_openai_ask(messages: List[dict]) -> str:
+    """Return the latest user turn's text from an OpenAI `messages` array.
+
+    Content may be a plain string or the multimodal list form
+    (``[{"type": "text", "text": ...}, ...]``); both are handled.
+    """
+    for message in reversed(messages or []):
+        if message.get("role") != "user":
+            continue
+        content = message.get("content")
+        if isinstance(content, str):
+            return content
+        if isinstance(content, list):
+            texts = [
+                part.get("text", "")
+                for part in content
+                if isinstance(part, dict) and part.get("type") == "text"
+            ]
+            return "\n".join(t for t in texts if t)
+    return ""
+
+
+@app.get("/v1/models")
+def openai_list_models():
+    created = int(time.time())
+    data = [
+        {"id": name, "object": "model", "created": created, "owned_by": "mavrickgpt"}
+        for name in config.get_models_list()
+    ]
+    return {"object": "list", "data": data}
+
+
+@app.post("/v1/chat/completions")
+async def openai_chat_completions(http_request: Request):
+    body = await http_request.json()
+    messages = body.get("messages") or []
+    ask = _extract_openai_ask(messages)
+    if not ask:
+        raise HTTPException(
+            status_code=400, detail="no user message found in request body"
+        )
+
+    # Let the server pick its configured model rather than trusting the UI's id.
+    chat_request = ChatRequest(ask=ask, model=None, stream=False)
+    result = chat(chat_request, http_request)
+    analysis = result.analysis if isinstance(result, ChatResponse) else str(result)
+
+    model_name = body.get("model") or (config.get_models_list() or ["mavrickgpt"])[0]
+    completion_id = f"chatcmpl-{os.urandom(12).hex()}"
+    created = int(time.time())
+
+    if body.get("stream"):
+        def event_stream():
+            first = {
+                "id": completion_id,
+                "object": "chat.completion.chunk",
+                "created": created,
+                "model": model_name,
+                "choices": [
+                    {"index": 0, "delta": {"role": "assistant"}, "finish_reason": None}
+                ],
+            }
+            yield f"data: {json.dumps(first)}\n\n"
+            body_chunk = {
+                "id": completion_id,
+                "object": "chat.completion.chunk",
+                "created": created,
+                "model": model_name,
+                "choices": [
+                    {"index": 0, "delta": {"content": analysis}, "finish_reason": None}
+                ],
+            }
+            yield f"data: {json.dumps(body_chunk)}\n\n"
+            done = {
+                "id": completion_id,
+                "object": "chat.completion.chunk",
+                "created": created,
+                "model": model_name,
+                "choices": [{"index": 0, "delta": {}, "finish_reason": "stop"}],
+            }
+            yield f"data: {json.dumps(done)}\n\n"
+            yield "data: [DONE]\n\n"
+
+        return StreamingResponse(event_stream(), media_type="text/event-stream")
+
+    return {
+        "id": completion_id,
+        "object": "chat.completion",
+        "created": created,
+        "model": model_name,
+        "choices": [
+            {
+                "index": 0,
+                "message": {"role": "assistant", "content": analysis},
+                "finish_reason": "stop",
+            }
+        ],
+        "usage": {"prompt_tokens": 0, "completion_tokens": 0, "total_tokens": 0},
+    }
+
+
 class ToolsetsSummary(BaseModel):
     """Aggregate toolset counts by status."""
 

@@ -60,18 +60,16 @@ RUN cd /tmp \
     && rm -f kubectl.sha256 \
     && kubectl version --client
 
-# ArgoCD / Helm: CVE-patched static binaries (see scripts/build_go_binaries.sh).
-COPY bin/go-cve-rebuild/${TARGETARCH}/argocd.gz /tmp/argocd.gz
-COPY bin/go-cve-rebuild/${TARGETARCH}/argocd.gz.sha256 /tmp/argocd.gz.sha256
-RUN cd /tmp && sha256sum -c argocd.gz.sha256 \
-    && gunzip /tmp/argocd.gz && mv /tmp/argocd /argocd && chmod +x /argocd \
-    && rm -f /tmp/argocd.gz.sha256
+# ArgoCD / Helm: official upstream release binaries.
+RUN cd /tmp \
+    && curl -fsSL "https://github.com/argoproj/argo-cd/releases/download/v2.13.1/argocd-linux-${TARGETARCH}" -o /argocd \
+    && chmod +x /argocd
 
-COPY bin/go-cve-rebuild/${TARGETARCH}/helm.gz /tmp/helm.gz
-COPY bin/go-cve-rebuild/${TARGETARCH}/helm.gz.sha256 /tmp/helm.gz.sha256
-RUN cd /tmp && sha256sum -c helm.gz.sha256 \
-    && gunzip /tmp/helm.gz && mv /tmp/helm /helm && chmod +x /helm \
-    && rm -f /tmp/helm.gz.sha256
+RUN cd /tmp \
+    && curl -fsSL "https://get.helm.sh/helm-v3.16.3-linux-${TARGETARCH}.tar.gz" -o helm.tgz \
+    && tar -xzf helm.tgz \
+    && mv linux-${TARGETARCH}/helm /helm && chmod +x /helm \
+    && rm -rf helm.tgz linux-${TARGETARCH}
 
 # Set up poetry
 ARG PRIVATE_PACKAGE_REGISTRY="none"
@@ -170,7 +168,6 @@ RUN /usr/local/bin/pip install --upgrade --no-cache-dir \
     && /venv/bin/python -m pip uninstall -y pip \
     && /usr/local/bin/python -m pip uninstall -y pip
 
-COPY ./experimental/ag-ui/server-agui.py /app/experimental/ag-ui/server-agui.py
 COPY ./mavrick /app/mavrick
 COPY ./server.py /app/server.py
 COPY ./mavrick_cli.py /app/mavrick_cli.py

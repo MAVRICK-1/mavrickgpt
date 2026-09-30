@@ -20,10 +20,10 @@ RUN pip install --no-cache-dir -U \
     poetry config virtualenvs.create false && \
     poetry install --no-interaction --no-ansi --no-root
 
-COPY holmes_operator/ ./holmes_operator/
+COPY mavrick_operator/ ./mavrick_operator/
 
-RUN useradd -m -u 10001 holmesop && \
-    chown -R holmesop:holmesop /app
+RUN useradd -m -u 10001 mavrickop && \
+    chown -R mavrickop:mavrickop /app
 USER 10001
 
-ENTRYPOINT ["python", "-m", "holmes_operator.operator"]
+ENTRYPOINT ["python", "-m", "mavrick_operator.operator"]

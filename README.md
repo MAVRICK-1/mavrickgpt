@@ -108,6 +108,60 @@ MavrickGPT can fetch alerts/tickets to investigate from external systems, then w
 
 Read the [installation documentation](https://mavrickgpt.dev/installation/cli-installation/) to learn how to install MavrickGPT.
 
+## How to Run
+
+### 1. Install from source (Poetry)
+
+```bash
+git clone https://github.com/MAVRICK-1/mavrickgpt.git
+cd mavrickgpt
+poetry install
+```
+
+### 2. Set an LLM API key
+
+Any provider works (routed via LiteLLM). Set one:
+
+```bash
+export OPENAI_API_KEY="sk-..."      # or ANTHROPIC_API_KEY / GEMINI_API_KEY
+# open-weight / local models need no key:  ollama serve  then  --model ollama/llama3.1
+```
+
+### 3. Ask a question (CLI)
+
+```bash
+# one-shot
+poetry run mavrick ask "why is my pod crashlooping?"
+
+# interactive chat in the terminal
+poetry run mavrick ask -i
+
+# investigate a firing alert / ticket
+poetry run mavrick investigate alertmanager --alertmanager-url http://localhost:9093
+```
+
+Other subcommands: `mavrick toolset list`, `mavrick checks`, `mavrick version`.
+
+### 4. Run the HTTP API server
+
+```bash
+poetry run python server.py          # serves on http://0.0.0.0:5050
+curl localhost:5050/healthz          # -> {"status":"healthy"}
+curl localhost:5050/api/chat -H 'Content-Type: application/json' \
+  -d '{"ask":"what is wrong with my cluster?"}'
+```
+
+### 5. Run in Docker
+
+```bash
+docker build -t mavrick:local .
+docker run --rm -p 5050:5050 -e OPENAI_API_KEY="sk-..." mavrick:local
+```
+
+### 6. Run on Kubernetes
+
+See [Deploy on Kubernetes](#-deploy-on-kubernetes) below (Helm + optional LibreChat UI).
+
 ## Supported LLM Providers
 
 <a href="https://mavrickgpt.dev/ai-providers/">
@@ -128,28 +182,27 @@ See the [walkthrough documentation](https://mavrickgpt.dev/latest/walkthrough/) 
 
 By design, MavrickGPT has **read-only access** and respects RBAC permissions. It is safe to run in production environments.
 
+## 🏆 Hacktoberfest 2025 additions
+
+This fork (theme: **open-source AI / open-weight models**) adds:
+
+- **Tool-call efficiency metric** for the eval judge — flags wasted, duplicate, and retry-loop tool calls (common on small open-weight models). Advisory and opt-in; never fails a test. See [`hackathon/`](hackathon/).
+- **LibreChat web UI** + Helm chart (opt-in) — an open-source chat interface for MavrickGPT.
+- **Kubernetes deployment & operator docs** — see [`docs/deployment/`](docs/deployment/README.md).
+
+## 🚀 Deploy on Kubernetes
+
+```bash
+helm install mavrick ./helm/mavrick -n mavrick --create-namespace
+# optional web UI:
+helm upgrade mavrick ./helm/mavrick -n mavrick --reuse-values --set librechat.enabled=true
+```
+
+Full guide (deploy to a cluster, web UI, operator):
+[docs/deployment/README.md](docs/deployment/README.md)
+
 ## License
-Distributed under the Apache 2.0 License. See [LICENSE](https://github.com/MavrickGPT/mavrickgpt/blob/master/LICENSE) for more information.
-<!-- Change License -->
 
-## Community
-
-Join our community to discuss the MavrickGPT roadmap and share feedback:
-
-- [Community Meetups](https://docs.google.com/document/d/1q3L2iUd8tNu-NmZ6QIVOJcCLHrile9CC5QguOGTn_tg/edit?tab=t.0#heading=h.ihdnrt5bstrv)
-
-## Support
-
-If you have any questions, feel free to message us on [MavrickGPT Slack Channel](https://cloud-native.slack.com/archives/C0A1SPQM5PZ)
-
-## How to Contribute
-
-Please read our [CONTRIBUTING.md](CONTRIBUTING.md) for guidelines and instructions.
-
-For help, contact us on [Slack](https://cloud-native.slack.com/archives/C0A1SPQM5PZ) or ask [DeepWiki AI](https://deepwiki.com/MavrickGPT/mavrickgpt) your questions.
-
-Please make sure to follow the CNCF code of conduct - [details here](https://github.com/MavrickGPT/mavrickgpt/blob/master/CODE_OF_CONDUCT.md).
-[![Ask DeepWiki](https://deepwiki.com/badge.svg)](https://deepwiki.com/MavrickGPT/mavrickgpt)
-
-[![OpenSSF Best Practices](https://www.bestpractices.dev/projects/11586/badge)](https://www.bestpractices.dev/projects/11586)
-[![OpenSSF Scorecard](https://api.scorecard.dev/projects/github.com/MavrickGPT/mavrickgpt/badge)](https://scorecard.dev/viewer/?uri=github.com/MavrickGPT/mavrickgpt)
+Distributed under the **Apache 2.0 License** — see [LICENSE](LICENSE). MavrickGPT is
+built on [HolmesGPT](https://github.com/robusta-dev/holmesgpt) (Apache 2.0) by
+Robusta.dev; upstream attribution is retained as required by the license.
