@@ -1,0 +1,45 @@
+{{- if .Values.librechat.enabled }}
+{{- $mavrickUrl := .Values.librechat.mavrickApiUrl | default (printf "http://%s-mavrick:80" .Release.Name) }}
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ .Release.Name }}-librechat-config
+  namespace: {{ .Release.Namespace }}
+  labels:
+    app: mavrick-librechat
+    {{- include "mavrick.commonLabels" . | nindent 4 }}
+data:
+  # LibreChat configuration. Registers MavrickGPT as a custom endpoint so the
+  # chat UI forwards conversations to the in-cluster MavrickGPT API.
+  librechat.yaml: |
+    version: 1.2.1
+    cache: true
+    endpoints:
+      custom:
+        - name: "MavrickGPT"
+          apiKey: "mavrick"
+          baseURL: "{{ $mavrickUrl }}/v1"
+          models:
+            default: ["mavrick-agent"]
+            fetch: false
+          titleConvo: true
+          titleModel: "mavrick-agent"
+          summarize: false
+          modelDisplayLabel: "MavrickGPT"
+          iconURL: ""
+---
+apiVersion: v1
+kind: Secret
+metadata:
+  name: {{ .Release.Name }}-librechat-secrets
+  namespace: {{ .Release.Namespace }}
+  labels:
+    app: mavrick-librechat
+    {{- include "mavrick.commonLabels" . | nindent 4 }}
+type: Opaque
+stringData:
+  JWT_SECRET: {{ .Values.librechat.secrets.jwtSecret | quote }}
+  JWT_REFRESH_SECRET: {{ .Values.librechat.secrets.jwtRefreshSecret | quote }}
+  CREDS_KEY: {{ .Values.librechat.secrets.credsKey | quote }}
+  CREDS_IV: {{ .Values.librechat.secrets.credsIV | quote }}
+{{- end }}

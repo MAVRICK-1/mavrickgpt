@@ -1,0 +1,6 @@
+toolsets:
+  test-mariadb:
+    type: database
+    enabled: true
+    config:
+      connection_url: "mysql://mavrick:mavrickpass@localhost:10219/testdb"

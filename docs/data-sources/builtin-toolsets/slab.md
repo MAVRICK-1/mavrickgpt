@@ -1,0 +1,55 @@
+# Slab
+
+By enabling this toolset, MavrickGPT will be able to consult runbooks from Slab pages.
+
+Retrieve your Slab [API token](https://help.slab.com/en/articles/6545629-developer-tools-api-webhooks) prior to configuring this toolset. Do note that Slab API is only available for Slab premium users. See [here](https://help.slab.com/en/articles/6545629-developer-tools-api-webhooks).
+
+## Configuration
+
+=== "Mavrick CLI"
+
+    First, set the environment variable:
+    ```bash
+    export SLAB_API_KEY="<your Slab API key>"
+    ```
+
+    Then add the following to **~/.mavrick/config.yaml**. Create the file if it doesn't exist:
+    ```yaml
+    toolsets:
+        slab:
+            enabled: true
+    ```
+
+    --8<-- "snippets/toolset_refresh_warning.md"
+
+=== "Robusta Helm Chart"
+
+    ```yaml
+    mavrick:
+        additionalEnvVars:
+            - name: SLAB_API_KEY
+              value: "<your Slab API key>"
+        toolsets:
+            slab:
+                enabled: true
+    ```
+
+    Apply the configuration:
+
+    ```bash
+    helm upgrade robusta robusta/robusta -f generated_values.yaml --set clusterName=<YOUR_CLUSTER_NAME>
+    ```
+
+To test, run:
+
+```bash
+mavrick ask "Why is my pod failing, if it's a crashloopbackoff use the runbooks from Slab"
+```
+
+## Capabilities
+
+--8<-- "snippets/toolset_capabilities_intro.md"
+
+| Tool Name | Description |
+|-----------|-------------|
+| fetch_slab_document | Fetch a document from Slab. Use this to fetch runbooks if they are present before starting your investigation. |

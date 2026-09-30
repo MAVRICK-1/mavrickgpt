@@ -1,0 +1,59 @@
+{{- if .Values.librechat.enabled }}
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: {{ .Release.Name }}-librechat-mongodb
+  namespace: {{ .Release.Namespace }}
+  labels:
+    app: mavrick-librechat-mongodb
+    {{- include "mavrick.commonLabels" . | nindent 4 }}
+spec:
+  serviceName: {{ .Release.Name }}-librechat-mongodb
+  replicas: 1
+  selector:
+    matchLabels:
+      app: mavrick-librechat-mongodb
+  template:
+    metadata:
+      labels:
+        app: mavrick-librechat-mongodb
+        {{- include "mavrick.commonLabels" . | nindent 8 }}
+    spec:
+      containers:
+        - name: mongodb
+          image: {{ .Values.librechat.mongodb.image }}
+          args: ["--noauth"]
+          ports:
+            - containerPort: 27017
+              name: mongo
+          volumeMounts:
+            - name: data
+              mountPath: /data/db
+          resources:
+            {{- toYaml .Values.librechat.mongodb.resources | nindent 12 }}
+  volumeClaimTemplates:
+    - metadata:
+        name: data
+      spec:
+        accessModes: ["ReadWriteOnce"]
+        resources:
+          requests:
+            storage: {{ .Values.librechat.mongodb.storage }}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ .Release.Name }}-librechat-mongodb
+  namespace: {{ .Release.Namespace }}
+  labels:
+    app: mavrick-librechat-mongodb
+    {{- include "mavrick.commonLabels" . | nindent 4 }}
+spec:
+  clusterIP: None
+  selector:
+    app: mavrick-librechat-mongodb
+  ports:
+    - name: mongo
+      port: 27017
+      targetPort: 27017
+{{- end }}

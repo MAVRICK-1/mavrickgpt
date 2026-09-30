@@ -1,0 +1,6 @@
+toolsets:
+  test-mysql:
+    type: database
+    enabled: true
+    config:
+      connection_url: "mysql://mavrick:mavrickpass@localhost:10218/testdb"

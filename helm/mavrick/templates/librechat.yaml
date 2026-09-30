@@ -1,0 +1,131 @@
+{{- if .Values.librechat.enabled }}
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ .Release.Name }}-librechat
+  namespace: {{ .Release.Namespace }}
+  labels:
+    app: mavrick-librechat
+    {{- include "mavrick.commonLabels" . | nindent 4 }}
+spec:
+  replicas: {{ .Values.librechat.replicas }}
+  selector:
+    matchLabels:
+      app: mavrick-librechat
+  template:
+    metadata:
+      labels:
+        app: mavrick-librechat
+        {{- include "mavrick.commonLabels" . | nindent 8 }}
+      annotations:
+        checksum/librechat-config: {{ .Values.librechat | toYaml | sha256sum }}
+    spec:
+      containers:
+        - name: librechat
+          image: {{ .Values.librechat.image }}
+          imagePullPolicy: {{ .Values.librechat.imagePullPolicy }}
+          ports:
+            - containerPort: {{ .Values.librechat.port }}
+              name: http
+          env:
+            - name: HOST
+              value: "0.0.0.0"
+            - name: PORT
+              value: {{ .Values.librechat.port | quote }}
+            - name: MONGO_URI
+              value: "mongodb://{{ .Release.Name }}-librechat-mongodb:27017/LibreChat"
+            - name: CONFIG_PATH
+              value: /app/librechat.yaml
+            - name: ALLOW_REGISTRATION
+              value: "true"
+            - name: JWT_SECRET
+              valueFrom:
+                secretKeyRef:
+                  name: {{ .Release.Name }}-librechat-secrets
+                  key: JWT_SECRET
+            - name: JWT_REFRESH_SECRET
+              valueFrom:
+                secretKeyRef:
+                  name: {{ .Release.Name }}-librechat-secrets
+                  key: JWT_REFRESH_SECRET
+            - name: CREDS_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: {{ .Release.Name }}-librechat-secrets
+                  key: CREDS_KEY
+            - name: CREDS_IV
+              valueFrom:
+                secretKeyRef:
+                  name: {{ .Release.Name }}-librechat-secrets
+                  key: CREDS_IV
+          volumeMounts:
+            - name: config
+              mountPath: /app/librechat.yaml
+              subPath: librechat.yaml
+          readinessProbe:
+            httpGet:
+              path: /health
+              port: http
+            initialDelaySeconds: 20
+            periodSeconds: 10
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: http
+            initialDelaySeconds: 40
+            periodSeconds: 15
+          resources:
+            {{- toYaml .Values.librechat.resources | nindent 12 }}
+      volumes:
+        - name: config
+          configMap:
+            name: {{ .Release.Name }}-librechat-config
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ .Release.Name }}-librechat
+  namespace: {{ .Release.Namespace }}
+  labels:
+    app: mavrick-librechat
+    {{- include "mavrick.commonLabels" . | nindent 4 }}
+spec:
+  type: {{ .Values.librechat.service.type }}
+  selector:
+    app: mavrick-librechat
+  ports:
+    - name: http
+      port: {{ .Values.librechat.service.port }}
+      targetPort: http
+      protocol: TCP
+{{- if .Values.librechat.ingress.enabled }}
+---
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: {{ .Release.Name }}-librechat
+  namespace: {{ .Release.Namespace }}
+  labels:
+    app: mavrick-librechat
+    {{- include "mavrick.commonLabels" . | nindent 4 }}
+  {{- with .Values.librechat.ingress.annotations }}
+  annotations:
+    {{- toYaml . | nindent 4 }}
+  {{- end }}
+spec:
+  {{- with .Values.librechat.ingress.className }}
+  ingressClassName: {{ . }}
+  {{- end }}
+  rules:
+    - host: {{ .Values.librechat.ingress.host | quote }}
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: {{ .Release.Name }}-librechat
+                port:
+                  number: {{ .Values.librechat.service.port }}
+{{- end }}
+{{- end }}

@@ -1,0 +1,6 @@
+toolsets:
+  test-postgres:
+    type: database
+    enabled: true
+    config:
+      connection_url: "postgresql://mavrick:mavrickpass@localhost:10217/mavrickdb"
