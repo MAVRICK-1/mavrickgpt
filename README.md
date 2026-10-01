@@ -17,6 +17,7 @@ open-weight models via Ollama).
 - [Build & deploy the CLI](#build--deploy-the-cli)
 - [Add an MCP server](#add-an-mcp-server)
 - [Deploy on Kubernetes](#deploy-on-kubernetes)
+- [Run fully open-source: Ollama in the cluster](#run-fully-open-source-ollama-in-the-cluster)
 - [Operator mode (24/7 health checks)](#operator-mode-247-health-checks)
 - [Data sources](#data-sources)
 - [Hacktoberfest 2025 additions](#hacktoberfest-2025-additions)
@@ -316,6 +317,81 @@ kubectl create secret generic mavrick-llm-keys \
 helm upgrade mavrick ./helm/mavrick -n mavrick --reuse-values \
   --set 'extraEnvVarsSecrets[0]=mavrick-llm-keys'
 ```
+
+---
+
+## Run fully open-source: Ollama in the cluster
+
+Skip external LLM APIs entirely — deploy [Ollama](https://ollama.com) as its own
+Deployment + Service inside the cluster and point every MavrickGPT conversation
+at it over in-cluster DNS. No API key, no data leaving the cluster.
+
+```yaml
+# ollama.yaml
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: ollama
+  namespace: mavrick
+spec:
+  replicas: 1
+  selector:
+    matchLabels: { app: ollama }
+  template:
+    metadata:
+      labels: { app: ollama }
+    spec:
+      containers:
+        - name: ollama
+          image: ollama/ollama:latest
+          ports: [{ containerPort: 11434 }]
+          volumeMounts:
+            - { name: models, mountPath: /root/.ollama }
+          resources:
+            requests: { cpu: "1", memory: 4Gi }
+            limits: { cpu: "4", memory: 12Gi }   # bump for bigger models / GPU nodes
+      volumes:
+        - name: models
+          emptyDir: {}   # swap for a PVC to persist pulled models across restarts
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: ollama
+  namespace: mavrick
+spec:
+  selector: { app: ollama }
+  ports: [{ port: 11434, targetPort: 11434 }]
+```
+
+```bash
+kubectl apply -f ollama.yaml
+kubectl wait --for=condition=available deploy/ollama -n mavrick --timeout=120s
+
+# pull the model once it's running
+kubectl exec -n mavrick deploy/ollama -- ollama pull llama3.1
+```
+
+Point MavrickGPT at the in-cluster Ollama service instead of an external
+provider — no `LLM_API_KEY` secret needed at all:
+
+```bash
+helm upgrade mavrick ./helm/mavrick -n mavrick --reuse-values \
+  --set 'extraEnvVars[0].name=OLLAMA_API_BASE' \
+  --set 'extraEnvVars[0].value=http://ollama.mavrick.svc.cluster.local:11434' \
+  --set 'config.model=ollama_chat/llama3.1'
+```
+
+Every conversation — `ask`, `investigate`, and the HTTP/OpenAI-compatible API —
+now routes through the self-hosted model:
+
+```bash
+kubectl exec -n mavrick deploy/mavrick-mavrick -- \
+  mavrick ask "why is my pod crashlooping?" --model ollama_chat/llama3.1
+```
+
+Swap `llama3.1` for any Ollama model (`qwen2.5`, `mistral`, `deepseek-r1`, …) —
+just `ollama pull` it first and update `config.model` to match.
 
 ---
 
