@@ -9,12 +9,3 @@ test-llm-ask-mavrick:
 
 test-without-llm:
 	poetry run pytest tests -m "not llm"
-
-docs:
-	poetry run mkdocs serve --dev-addr=127.0.0.1:7000
-
-docs-build:
-	poetry run mkdocs build
-
-docs-strict:
-	poetry run mkdocs serve --dev-addr=127.0.0.1:7000 --strict
