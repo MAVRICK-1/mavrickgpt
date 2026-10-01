@@ -217,6 +217,83 @@ they loaded with:
 poetry run mavrick toolset list
 ```
 
+### Deploy an MCP server to Kubernetes
+
+In a cluster, run the MCP server as its own Deployment + Service, then point
+MavrickGPT at it with the in-cluster DNS name. Here is the **AWS MCP server** so
+MavrickGPT can fetch AWS data (RDS events, instances, slow query logs, …):
+
+```yaml
+# aws-mcp.yaml
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: aws-mcp-server
+  namespace: mavrick
+spec:
+  replicas: 1
+  selector:
+    matchLabels: { app: aws-mcp-server }
+  template:
+    metadata:
+      labels: { app: aws-mcp-server }
+    spec:
+      containers:
+        - name: aws-mcp
+          image: ghcr.io/awslabs/mcp/aws-api-mcp-server:latest
+          args: ["--transport", "sse", "--host", "0.0.0.0", "--port", "8000"]
+          ports: [{ containerPort: 8000 }]
+          envFrom:
+            - secretRef: { name: aws-credentials }   # AWS_ACCESS_KEY_ID / AWS_SECRET_ACCESS_KEY / AWS_REGION
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: aws-mcp-server
+  namespace: mavrick
+spec:
+  selector: { app: aws-mcp-server }
+  ports: [{ port: 8000, targetPort: 8000 }]
+```
+
+```bash
+# give the MCP server AWS creds, then deploy it
+kubectl create secret generic aws-credentials -n mavrick \
+  --from-literal=AWS_ACCESS_KEY_ID="..." \
+  --from-literal=AWS_SECRET_ACCESS_KEY="..." \
+  --from-literal=AWS_REGION="us-east-1"
+kubectl apply -f aws-mcp.yaml
+```
+
+Then register it with MavrickGPT via the Helm chart's `mcp_servers` config so the
+agent connects over in-cluster DNS:
+
+```yaml
+# values override for the mavrick chart
+additionalConfig:
+  mcp_servers:
+    aws:
+      description: "AWS MCP Server - RDS, EC2, and more"
+      config:
+        url: "http://aws-mcp-server.mavrick.svc.cluster.local:8000/sse"
+        mode: "sse"
+```
+
+```bash
+helm upgrade mavrick ./helm/mavrick -n mavrick --reuse-values -f values-override.yaml
+```
+
+Now ask MavrickGPT a question that needs AWS data and it will call the MCP server
+to fetch it:
+
+```bash
+kubectl exec -n mavrick deploy/mavrick-mavrick -- \
+  mavrick ask "list my RDS instances and any recent events"
+```
+
+The same pattern works for any MCP server (GitHub, Azure, GitLab, …) — swap the
+image and the `url`.
+
 ---
 
 ## Deploy on Kubernetes
